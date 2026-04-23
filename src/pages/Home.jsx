@@ -269,7 +269,7 @@ export default function Home() {
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ marginBottom: '32px', padding: '16px 0', borderBottom: '1px solid var(--color-outline-variant)', position: 'sticky', top: '64px', zIndex: 35, background: 'var(--color-surface)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', gap: '12px', overflowX: 'auto', whiteSpace: 'nowrap', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+      <div style={{ marginBottom: '32px', padding: '16px 0', borderBottom: '1px solid var(--color-outline-variant)', position: 'sticky', top: '72px', zIndex: 35, background: 'var(--color-surface)', display: 'flex', alignItems: 'center', gap: '12px', overflowX: 'auto', whiteSpace: 'nowrap', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
         <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--color-primary)', marginRight: '8px' }}>필터링:</div>
         {availableSources.map(name => {
           const isActive = activeSourceFilters.includes(name);
