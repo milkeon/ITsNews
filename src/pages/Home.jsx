@@ -190,8 +190,74 @@ export default function Home() {
                     let title = titleEl ? titleEl.textContent.trim() : item.text.split('\n')[0].trim();
                     if (title.length < 5 && item.text.length > title.length) title = item.text.trim().substring(0, 50);
 
-                    // 2. 요약 추출 (제목과 겹치지 않는 텍스트 탐색)
-                    const img = container.querySelector('img');
+                    // 2. 지능형 썸네일 추출 (점수제 엔진 v2)
+                    const allElements = Array.from(container.querySelectorAll('*'));
+                    const candidates = [];
+
+                    allElements.forEach(el => {
+                      let url = null;
+                      let type = '';
+                      
+                      if (el.tagName === 'IMG') {
+                        // 지연 로딩 속성 전수 조사
+                        url = el.getAttribute('src') || el.getAttribute('data-src') || el.getAttribute('data-original') || 
+                              el.getAttribute('data-lazy-src') || el.getAttribute('data-srcset') || el.getAttribute('data-img-url');
+                        type = 'img';
+                      } else {
+                        const style = el.getAttribute('style') || '';
+                        const match = style.match(/url\(['"]?([^'"]+)['"]?\)/);
+                        if (match) {
+                          url = match[1];
+                          type = 'bg';
+                        }
+                      }
+
+                      if (url && url.length > 0 && !url.startsWith('data:')) {
+                        let score = 0;
+                        const lowUrl = url.toLowerCase();
+                        const className = (typeof el.className === 'string' ? el.className : '').toLowerCase();
+                        const id = (el.id || '').toLowerCase();
+                        const alt = (el.getAttribute('alt') || '').toLowerCase();
+                        const combined = `${className} ${id} ${alt} ${lowUrl}`;
+
+                        // 가점 1: 기사 사진 특유의 경로 (매우 중요)
+                        if (['upload', 'article', 'news', 'content', 'cms', 'file', 'attach'].some(k => lowUrl.includes(k))) score += 25;
+                        
+                        // 가점 2: 썸네일 관련 키워드
+                        if (['thumb', 'poster', 'representative', 'main', 'photo', 'frame', 'image', 'picture', 'lead'].some(k => combined.includes(k))) score += 15;
+                        if (['card', 'wrapper', 'head', 'body'].some(k => combined.includes(k))) score += 5;
+                        if (type === 'bg') score += 5;
+                        
+                        // 감점: 확실한 로고/아이콘 (패턴 매칭 강화)
+                        if (['logo', 'icon', 'avatar', 'profile', 'nav', 'brand', 'gsc', 'social', 'sns', 'comment', 'user', 'btn', 'button', 'sprite'].some(k => combined.includes(k))) {
+                          // 클래스명에 포함되어도 URL에 기사 관련 단어가 있으면 감점 완화
+                          if (['upload', 'article', 'news'].some(k => lowUrl.includes(k))) score -= 10;
+                          else score -= 60;
+                        }
+                        
+                        const w = parseInt(el.getAttribute('width') || '500');
+                        const h = parseInt(el.getAttribute('height') || '500');
+                        if (w < 50 || h < 50) score -= 30;
+
+                        candidates.push({ url, score });
+                      }
+                    });
+
+                    candidates.sort((a, b) => b.score - a.score);
+                    let imgSrc = candidates.length > 0 && candidates[0].score > -10 ? candidates[0].url : null;
+
+                    if (imgSrc && !imgSrc.startsWith('http')) {
+                      try { imgSrc = new URL(imgSrc, url).href; } catch(e) {}
+                    }
+
+                    if (imgSrc && !imgSrc.startsWith('http')) {
+                      try { imgSrc = new URL(imgSrc, url).href; } catch(e) {}
+                    }
+
+                    if (imgSrc && !imgSrc.startsWith('http')) {
+                      try { imgSrc = new URL(imgSrc, url).href; } catch(e) {}
+                    }
+                    
                     const summaryEl = container.querySelector('p, span, .desc, .summary, div:last-child');
                     let summary = summaryEl ? summaryEl.textContent.trim() : '최신 IT 소식을 확인해보세요.';
                     
@@ -207,7 +273,7 @@ export default function Home() {
                       source: cleanName,
                       summary: summary.length > 120 ? summary.substring(0, 120) + '...' : summary,
                       url: fullUrl,
-                      img: img?.getAttribute('src') || img?.getAttribute('data-src') || stableImages[(results.length + cleanName.length) % stableImages.length],
+                      img: imgSrc || stableImages[(results.length + cleanName.length) % stableImages.length],
                       baseViews: Math.floor(Math.random() * 100)
                     });
                   });

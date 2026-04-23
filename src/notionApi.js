@@ -47,15 +47,22 @@ export const fetchAllNotionData = async () => {
           id: page.id,
           name: page.properties.Name?.title?.[0]?.plain_text || '',
           url: page.properties.URL?.url || '',
+          likedAt: new Date(page.created_time).getTime(),
           hidden
         });
       } else if (type === 'Keyword') {
         keywords.push({
           id: page.id,
           text: page.properties.Name?.title?.[0]?.plain_text || '',
+          likedAt: new Date(page.created_time).getTime(),
           hidden
         });
       } else if (type === 'Article') {
+        const props = page.properties;
+        // 다양한 가능한 이미지 속성명 확인
+        const imageProp = props.Image || props.Thumbnail || props.imageUrl || props['이미지'] || props['썸네일'];
+        const img = imageProp?.url || imageProp?.files?.[0]?.file?.url || imageProp?.files?.[0]?.external?.url || '';
+        
         articles.push({
           id: page.properties.URL?.url || page.id,
           notionPageId: page.id,
@@ -64,7 +71,10 @@ export const fetchAllNotionData = async () => {
           summary: '', 
           date: page.properties.PublishedAt?.rich_text?.[0]?.plain_text || '',
           author: page.properties.Publisher?.rich_text?.[0]?.plain_text || '',
-          imageUrl: page.properties.Image?.url || '',
+          source: page.properties.Publisher?.rich_text?.[0]?.plain_text || '', // source 필드 추가
+          imageUrl: img,
+          img: img,
+          likedAt: new Date(page.created_time).getTime(),
           hidden
         });
       }
@@ -163,7 +173,7 @@ export const addArticleToNotion = async (article) => {
         Name: { title: [{ text: { content: article.title || '' } }] },
         Type: { select: { name: 'Article' } },
         URL: { url: article.url || null },
-        Image: { url: article.imageUrl || null },
+        Image: { url: article.img || article.imageUrl || null },
         Publisher: { rich_text: [{ text: { content: article.author || article.source || '' } }] },
         PublishedAt: { rich_text: [{ text: { content: article.date || '' } }] },
         Hidden: { checkbox: false },

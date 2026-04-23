@@ -114,7 +114,7 @@ export const useStore = create(
             }
           } else {
             set((state) => ({
-              likedArticles: [...state.likedArticles, { ...article, hidden: false }]
+              likedArticles: [{ ...article, hidden: false, likedAt: Date.now() }, ...state.likedArticles]
             }));
             const realId = await notionApi.addArticleToNotion(article);
             if (realId) {

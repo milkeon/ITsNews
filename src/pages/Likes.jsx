@@ -2,12 +2,30 @@ import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { Trash2, Download } from 'lucide-react';
 
+const stableImages = [
+  "https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1516116216624-53e697fedbea?auto=format&fit=crop&w=600&q=80",
+  "https://images.unsplash.com/photo-1507721999472-8ed4421c4af2?auto=format&fit=crop&w=600&q=80"
+];
+
 export default function Likes() {
   const { likedKeywords, addKeyword, removeKeyword, likedArticles, toggleArticleLike, showToast } = useStore();
   const [inputValue, setInputValue] = useState('');
 
+  const handleImageError = (e) => { 
+    e.target.src = stableImages[Math.floor(Math.random() * stableImages.length)]; 
+  };
+
   const visibleKeywords = likedKeywords.filter(k => !k.hidden);
-  const visibleArticles = likedArticles.filter(a => !a.hidden);
+  const visibleArticles = likedArticles
+    .filter(a => !a.hidden)
+    .sort((a, b) => {
+      const timeA = a.likedAt || 0;
+      const timeB = b.likedAt || 0;
+      return timeB - timeA; // 내림차순: 큰 숫자(최신)가 위로
+    });
 
   const handleSave = () => {
     if (!inputValue.trim()) return;
@@ -108,41 +126,55 @@ export default function Likes() {
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '32px', alignItems: 'stretch' }}>
           {visibleArticles.length === 0 && <p style={{ color: 'var(--color-on-surface-variant)', gridColumn: '1 / -1' }}>아직 좋아요 한 기사가 없습니다.</p>}
-          {visibleArticles.map(article => (
-            <div 
-              key={article.id} 
-              className="premium-card shadow-ambient" 
-              style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer', position: 'relative' }}
-              onClick={(e) => {
-                 if (e.target.closest('button')) return;
-                 window.open(article.url, '_blank');
-              }}
-            >
-              {article.img && (
-                <div style={{ width: '100%', height: '180px', overflow: 'hidden' }}>
-                  <img src={article.img} alt={article.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {visibleArticles.map(article => {
+            // URL 전체를 해싱하여 고유한 인덱스 생성
+            const s = article.id || article.url || '';
+            let hash = 0;
+            for (let i = 0; i < s.length; i++) {
+              hash = ((hash << 5) - hash) + s.charCodeAt(i);
+              hash |= 0;
+            }
+            const displayImg = article.img || article.imageUrl || stableImages[Math.abs(hash) % stableImages.length];
+            
+            return (
+              <div 
+                key={article.id} 
+                className="premium-card shadow-ambient" 
+                style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer', position: 'relative' }}
+                onClick={(e) => {
+                   if (e.target.closest('button')) return;
+                   window.open(article.url, '_blank');
+                }}
+              >
+                <div style={{ width: '100%', height: '180px', overflow: 'hidden', background: 'var(--color-surface-container-low)' }}>
+                  <img 
+                    src={displayImg} 
+                    alt={article.title} 
+                    onError={handleImageError}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                  />
                 </div>
-              )}
-              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <span className="label gradient-text" style={{ textTransform: 'capitalize' }}>{article.source}</span>
-                </div>
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '12px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{article.title}</h3>
-                <p style={{ color: 'var(--color-on-surface-variant)', fontSize: '0.95rem', marginBottom: '32px', flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {article.summary}
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 'auto' }}>
-                  <button 
-                    title="좋아요 취소"
-                    onClick={(e) => { e.stopPropagation(); handleDeleteArticle(article); }}
-                    style={{ background: 'var(--color-error-container)', color: 'var(--color-error)', border: '1px solid transparent', padding: '10px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <span className="label gradient-text" style={{ textTransform: 'capitalize' }}>{article.source}</span>
+                  </div>
+                  <h3 style={{ fontSize: '1.25rem', marginBottom: '12px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{article.title}</h3>
+                  <p style={{ color: 'var(--color-on-surface-variant)', fontSize: '0.95rem', marginBottom: '32px', flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {article.summary}
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 'auto' }}>
+                    <button 
+                      title="좋아요 취소"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteArticle(article); }}
+                      style={{ background: 'var(--color-error-container)', color: 'var(--color-error)', border: '1px solid transparent', padding: '10px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </div>
