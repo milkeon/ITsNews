@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import * as notionApi from '../notionApi';
 
-// 실제 삭제 대신 hidden 처리를 위한 데이터 구조 설계
 export const useStore = create(
   persist(
-    (set) => ({
+    (set, get) => ({
       isDarkMode: false,
       toggleDarkMode: () => {
         set((state) => {
@@ -23,55 +23,110 @@ export const useStore = create(
         }, 3000); // 3초 뒤 사라짐
       },
 
+      // 통합된 Notion 데이터 로드
+      fetchNotionData: async () => {
+        const { sources, keywords, articles } = await notionApi.fetchAllNotionData();
+        
+        set({
+          newsSources: sources.length > 0 ? sources : get().newsSources,
+          likedKeywords: keywords,
+          likedArticles: articles
+        });
+      },
+
+      cachedMasterList: [],
+      setCachedMasterList: (list) => set({ cachedMasterList: list }),
+
       newsSources: [
         { id: 1, name: '요즘IT', url: 'https://yozm.wishket.com', hidden: false }
       ],
-      addSource: (name, url) => set((state) => ({
-        newsSources: [...state.newsSources, { id: Date.now(), name, url: url || name, hidden: false }]
-      })),
-      removeSource: (id) => set((state) => ({
-        newsSources: state.newsSources.map(s => 
-          s.id === id ? { ...s, hidden: true } : s
-        )
-      })),
+      addSource: async (name, url) => {
+        const tempId = Date.now();
+        set((state) => ({
+          newsSources: [...state.newsSources, { id: tempId, name, url: url || name, hidden: false }]
+        }));
+        
+        const realId = await notionApi.addSourceToNotion(name, url || name);
+        if (realId) {
+          set((state) => ({
+            newsSources: state.newsSources.map(s => s.id === tempId ? { ...s, id: realId } : s),
+            cachedMasterList: []
+          }));
+        }
+      },
+      removeSource: async (id) => {
+        set((state) => ({
+          newsSources: state.newsSources.map(s => 
+            s.id === id ? { ...s, hidden: true } : s
+          ),
+          cachedMasterList: []
+        }));
+        await notionApi.hideNotionPage(id);
+      },
       
-      likedKeywords: [
-        { id: 1, text: '스탠다드', hidden: false },
-        { id: 2, text: '프론트엔드', hidden: false }
-      ],
-      addKeyword: (text) => set((state) => ({
-        likedKeywords: [...state.likedKeywords, { id: Date.now(), text, hidden: false }]
-      })),
-      removeKeyword: (id) => set((state) => ({
-        likedKeywords: state.likedKeywords.map(k => 
-          k.id === id ? { ...k, hidden: true } : k
-        )
-      })),
+      likedKeywords: [],
+      addKeyword: async (text) => {
+        const tempId = Date.now();
+        set((state) => ({
+          likedKeywords: [...state.likedKeywords, { id: tempId, text, hidden: false }]
+        }));
+        
+        const realId = await notionApi.addKeywordToNotion(text);
+        if (realId) {
+          set((state) => ({
+            likedKeywords: state.likedKeywords.map(k => k.id === tempId ? { ...k, id: realId } : k)
+          }));
+        }
+      },
+      removeKeyword: async (id) => {
+        set((state) => ({
+          likedKeywords: state.likedKeywords.map(k => 
+            k.id === id ? { ...k, hidden: true } : k
+          )
+        }));
+        await notionApi.hideNotionPage(id);
+      },
 
       likedArticles: [],
-      toggleArticleLike: (article) => set((state) => {
-        const isLiked = state.likedArticles.some(a => a.id === article.id && !a.hidden);
+      toggleArticleLike: async (article) => {
+        const isLiked = get().likedArticles.some(a => a.id === article.id && !a.hidden);
+        
         if (isLiked) {
-          return {
+          const target = get().likedArticles.find(a => a.id === article.id);
+          set((state) => ({
             likedArticles: state.likedArticles.map(a => 
               a.id === article.id ? { ...a, hidden: true } : a
             )
-          };
+          }));
+          if (target && target.notionPageId) {
+            await notionApi.hideNotionPage(target.notionPageId);
+          }
         } else {
-          // 기존에 hidden 된게 있으면 다시 false로
-          const exists = state.likedArticles.find(a => a.id === article.id);
+          const exists = get().likedArticles.find(a => a.id === article.id);
           if (exists) {
-            return {
+            set((state) => ({
               likedArticles: state.likedArticles.map(a => 
                 a.id === article.id ? { ...a, hidden: false } : a
               )
-            };
+            }));
+            if (exists.notionPageId) {
+              await notionApi.unhideNotionPage(exists.notionPageId);
+            }
+          } else {
+            set((state) => ({
+              likedArticles: [...state.likedArticles, { ...article, hidden: false }]
+            }));
+            const realId = await notionApi.addArticleToNotion(article);
+            if (realId) {
+              set((state) => ({
+                likedArticles: state.likedArticles.map(a => 
+                  a.id === article.id ? { ...a, notionPageId: realId } : a
+                )
+              }));
+            }
           }
-          return {
-            likedArticles: [...state.likedArticles, { ...article, hidden: false }]
-          };
         }
-      }),
+      },
 
       purgeBadData: () => set((state) => ({
         likedArticles: state.likedArticles.filter(a => {
@@ -91,13 +146,9 @@ export const useStore = create(
       })),
     }),
     {
-      name: 'itsnew-storage',
-      // 메세지 같은 불필요한 상태는 저장하지 않고 영구 저장할 것들만 partialize
+      name: 'itsnews-storage',
       partialize: (state) => ({
         isDarkMode: state.isDarkMode,
-        newsSources: state.newsSources,
-        likedKeywords: state.likedKeywords,
-        likedArticles: state.likedArticles,
         articleViews: state.articleViews
       }),
       onRehydrateStorage: () => (state) => {

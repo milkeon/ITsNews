@@ -45,7 +45,7 @@ export default function Likes() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(visibleArticles, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href",     dataStr);
-    downloadAnchorNode.setAttribute("download", "itsnew_liked_articles.json");
+    downloadAnchorNode.setAttribute("download", "itsnews_liked_articles.json");
     document.body.appendChild(downloadAnchorNode); // required for firefox
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
@@ -53,7 +53,7 @@ export default function Likes() {
   };
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <div>
       <h1 style={{ fontSize: '2rem', marginBottom: '40px' }}>나의 관심사 아카이브</h1>
 
       <section style={{ marginBottom: '60px' }}>
@@ -106,26 +106,41 @@ export default function Likes() {
           </button>
         </div>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {visibleArticles.length === 0 && <p style={{ color: 'var(--color-on-surface-variant)' }}>아직 좋아요 한 기사가 없습니다.</p>}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '32px', alignItems: 'stretch' }}>
+          {visibleArticles.length === 0 && <p style={{ color: 'var(--color-on-surface-variant)', gridColumn: '1 / -1' }}>아직 좋아요 한 기사가 없습니다.</p>}
           {visibleArticles.map(article => (
             <div 
               key={article.id} 
               className="premium-card shadow-ambient" 
-              style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', padding: '24px', cursor: 'pointer', transition: 'border-color 0.2s', border: '1px solid transparent' }}
-              onClick={() => window.open(article.url, '_blank')}
+              style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer', position: 'relative' }}
+              onClick={(e) => {
+                 if (e.target.closest('button')) return;
+                 window.open(article.url, '_blank');
+              }}
             >
-              <div>
-                <h3 style={{ fontSize: '1.125rem', marginBottom: '8px' }}>{article.title}</h3>
-                <p style={{ color: 'var(--color-on-surface-variant)', fontSize: '0.9rem' }}>출처: {article.source}</p>
+              {article.img && (
+                <div style={{ width: '100%', height: '180px', overflow: 'hidden' }}>
+                  <img src={article.img} alt={article.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              )}
+              <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span className="label gradient-text" style={{ textTransform: 'capitalize' }}>{article.source}</span>
+                </div>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '12px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{article.title}</h3>
+                <p style={{ color: 'var(--color-on-surface-variant)', fontSize: '0.95rem', marginBottom: '32px', flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {article.summary}
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 'auto' }}>
+                  <button 
+                    title="좋아요 취소"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteArticle(article); }}
+                    style={{ background: 'var(--color-error-container)', color: 'var(--color-error)', border: '1px solid transparent', padding: '10px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
-              <button 
-                title="좋아요 취소"
-                onClick={(e) => { e.stopPropagation(); handleDeleteArticle(article); }}
-                style={{ background: 'var(--color-error-container)', color: 'var(--color-error)', border: '1px solid transparent', padding: '12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-              >
-                <Trash2 size={18} />
-              </button>
             </div>
           ))}
         </div>

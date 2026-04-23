@@ -6,7 +6,7 @@ export default function Layout() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Header />
-      <main style={{ flex: 1, padding: '32px 24px', maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
+      <main style={{ flex: 1, padding: '32px 24px', maxWidth: '1600px', width: '100%', margin: '0 auto' }}>
         <Outlet />
       </main>
       <Toast />

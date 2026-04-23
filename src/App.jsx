@@ -8,10 +8,12 @@ import Recommendations from './pages/Recommendations';
 
 function App() {
   const purgeBadData = useStore(state => state.purgeBadData);
+  const fetchNotionData = useStore(state => state.fetchNotionData);
 
   useEffect(() => {
     purgeBadData();
-  }, [purgeBadData]);
+    fetchNotionData();
+  }, [purgeBadData, fetchNotionData]);
 
   return (
     <BrowserRouter>

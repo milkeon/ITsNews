@@ -157,9 +157,7 @@ a {
   color: inherit;
   text-decoration: none;
 }
-a:hover {
-  opacity: 0.8;
-}
+/* a:hover opacity 효과 제거하여 카드 호버 시 어두워짐 방지 */
 
 h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.03em;

@@ -20,6 +20,11 @@ export default defineConfig({
         target: 'https://www.itworld.co.kr',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/proxy\/itworld/, '')
+      },
+      '/proxy/notion': {
+        target: 'https://api.notion.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy\/notion/, '')
       }
     }
   }

@@ -7,7 +7,7 @@ export default function Header() {
   
   return (
     <header className="glass-header" style={{ padding: '0 24px', borderBottom: '1px solid var(--color-outline-variant)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '72px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '72px', maxWidth: '1600px', margin: '0 auto' }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ background: 'var(--color-primary-container)', color: 'var(--color-on-primary-container)', padding: '8px', borderRadius: 'var(--radius-md)' }}>
             <Newspaper size={24} />

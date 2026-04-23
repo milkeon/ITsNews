@@ -3,9 +3,9 @@ import { useStore } from '../store/useStore';
 import { Heart, ExternalLink, Trash2, Plus, ChevronLeft, ChevronRight, Eye, Settings, X } from 'lucide-react';
 
 const mockHottest = [
-  { id: 101, title: "오픈AI의 새로운 모델, G-4 오퍼레이션의 파급력", source: "IT동아", url: "https://it.donga.com/105315/", image: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=1200&q=80" },
-  { id: 102, title: "애플 실리콘 M5, 벤치마크 유출 - 한계를 넘다", source: "지디넷", url: "https://zdnet.co.kr/view/?no=20240405121212", image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=80" },
-  { id: 103, title: "블록체인의 겨울은 끝났는가? 2026년 대전망", source: "요즘IT", url: "https://yozm.wishket.com/magazine/detail/2545/", image: "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=1200&q=80" },
+  { id: 101, title: "[Mock] 오픈AI의 새로운 모델, G-4 오퍼레이션의 파급력", source: "IT동아", url: "https://it.donga.com/", image: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&w=1200&q=80" },
+  { id: 102, title: "[Mock] 애플 실리콘 M5, 벤치마크 유출 - 한계를 넘다", source: "지디넷", url: "https://zdnet.co.kr/", image: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=80" },
+  { id: 103, title: "[Mock] 블록체인의 겨울은 끝났는가? 2026년 대전망", source: "요즘IT", url: "https://yozm.wishket.com/", image: "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=1200&q=80" },
 ];
 
 const stableImages = [
@@ -44,7 +44,8 @@ export default function Home() {
   const { 
     articleViews, incrementView, 
     toggleArticleLike, likedArticles, showToast, 
-    newsSources, addSource, removeSource 
+    newsSources, addSource, removeSource,
+    cachedMasterList, setCachedMasterList
   } = useStore();
   
   const [sourceInput, setSourceInput] = useState('');
@@ -75,6 +76,11 @@ export default function Home() {
   useEffect(() => {
     if (visibleSources.length === 0) {
       setMasterList([]);
+      return;
+    }
+
+    if (cachedMasterList && cachedMasterList.length > 0) {
+      setMasterList(cachedMasterList);
       return;
     }
 
@@ -184,7 +190,7 @@ export default function Home() {
             }
 
             articles.push({
-              id: `real-${source.id}-doc-${articles.length}`,
+              id: fullUrl,
               title: title,
               source: cleanName,
               summary: summary,
@@ -194,39 +200,41 @@ export default function Home() {
             });
           }
 
-          let deepFetchCount = 0;
+          const fetchPromises = [];
           for (const art of articles) {
-            if (deepFetchCount >= 4) break;
+            if (fetchPromises.length >= 4) break;
             if (art.summary === `${cleanName} 서버에서 수집된 실시간 전문입니다.`) {
-              try {
-                const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(art.url)}`, { cache: 'no-cache' });
-                if (!res.ok) continue;
-                const html = await res.text();
-                
-                // 프록시 타임아웃 캐시 방어
-                if (html.trim().length < 500 || html.includes('Request Timeout')) continue;
+              fetchPromises.push((async () => {
+                try {
+                  const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(art.url)}`, { cache: 'no-cache' });
+                  if (!res.ok) return;
+                  const html = await res.text();
+                  
+                  // 프록시 타임아웃 캐시 방어
+                  if (html.trim().length < 500 || html.includes('Request Timeout')) return;
 
-                const dDoc = new DOMParser().parseFromString(html, 'text/html');
-                const metaDesc = dDoc.querySelector('meta[property="og:description"], meta[name="description"]');
-                let extracted = '';
-                if (metaDesc && (metaDesc.content || '').trim().length > 10) {
-                    extracted = (metaDesc.content || '').trim();
-                } else {
-                    const ps = Array.from(dDoc.querySelectorAll('p, div[class*="content"], div[class*="body"]'));
-                    const validP = ps.find(p => {
-                        const txt = (p.textContent||'').replace(/\\s+/g, ' ').trim();
-                        return txt.length > 50 && !txt.includes('로그인') && !txt.includes('Copyright');
-                    });
-                    if (validP) extracted = (validP.textContent || '').replace(/\\s+/g, ' ').trim();
-                }
-                
-                if (extracted && extracted.length > 15) {
-                    art.summary = extracted.substring(0, 150) + (extracted.length > 150 ? '...' : '');
-                }
-                deepFetchCount++;
-              } catch(e) {}
+                  const dDoc = new DOMParser().parseFromString(html, 'text/html');
+                  const metaDesc = dDoc.querySelector('meta[property="og:description"], meta[name="description"]');
+                  let extracted = '';
+                  if (metaDesc && (metaDesc.content || '').trim().length > 10) {
+                      extracted = (metaDesc.content || '').trim();
+                  } else {
+                      const ps = Array.from(dDoc.querySelectorAll('p, div[class*="content"], div[class*="body"]'));
+                      const validP = ps.find(p => {
+                          const txt = (p.textContent||'').replace(/\\s+/g, ' ').trim();
+                          return txt.length > 50 && !txt.includes('로그인') && !txt.includes('Copyright');
+                      });
+                      if (validP) extracted = (validP.textContent || '').replace(/\\s+/g, ' ').trim();
+                  }
+                  
+                  if (extracted && extracted.length > 15) {
+                      art.summary = extracted.substring(0, 150) + (extracted.length > 150 ? '...' : '');
+                  }
+                } catch(e) {}
+              })());
             }
           }
+          await Promise.all(fetchPromises);
 
           if (articles.length > 0) return articles;
         } catch(e) {
@@ -234,7 +242,7 @@ export default function Home() {
         }
 
         return Array.from({length: 10}).map((_, i) => ({
-          id: `mock-${source.id}-doc-${i+1}`,
+          id: `${sourceUrl}-mock-${i+1}`,
           title: `[${cleanName}] 통신 지연: 무작위 기사 대체 중`,
           source: cleanName,
           summary: `대상 사이트로부터 파싱하지 못하여 회색(0) 처리됨`,
@@ -253,6 +261,7 @@ export default function Home() {
       }
 
       setMasterList(combined);
+      setCachedMasterList(combined);
       setLoading(false);
       setVisibleCount(8);
     };
