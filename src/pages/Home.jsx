@@ -96,22 +96,20 @@ export default function Home() {
           let fetchTarget = targetUrl;
 
           if (cleanName === '요즘IT') {
-             const res = await fetch('/proxy/yozm/magazine/');
-             resultHtml = await res.text();
+             targetUrl = 'https://yozm.wishket.com/magazine/';
              fetchTarget = 'https://yozm.wishket.com';
           } else if (cleanName === 'GeekNews') {
-             const res = await fetch('/proxy/geek/');
-             resultHtml = await res.text();
+             targetUrl = 'https://news.hada.io/';
              fetchTarget = 'https://news.hada.io';
           } else if (cleanName === 'ITWORLD') {
-             const res = await fetch('/proxy/itworld/');
-             resultHtml = await res.text();
+             targetUrl = 'https://www.itworld.co.kr/';
              fetchTarget = 'https://www.itworld.co.kr';
-          } else {
-             const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
-             const res = await fetch(proxyUrl);
-             resultHtml = await res.text();
           }
+          
+          const res = await fetch(`/api/crawl?url=${encodeURIComponent(targetUrl)}`);
+          if (!res.ok) throw new Error('Crawl failed');
+          const data = await res.json();
+          resultHtml = data.html;
           
           const doc = new DOMParser().parseFromString(resultHtml, 'text/html');
           let articles = [];
@@ -206,9 +204,10 @@ export default function Home() {
             if (art.summary === `${cleanName} 서버에서 수집된 실시간 전문입니다.`) {
               fetchPromises.push((async () => {
                 try {
-                  const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(art.url)}`, { cache: 'no-cache' });
+                  const res = await fetch(`/api/crawl?url=${encodeURIComponent(art.url)}`);
                   if (!res.ok) return;
-                  const html = await res.text();
+                  const data = await res.json();
+                  const html = data.html;
                   
                   // 프록시 타임아웃 캐시 방어
                   if (html.trim().length < 500 || html.includes('Request Timeout')) return;
@@ -342,9 +341,9 @@ export default function Home() {
     showToast(`'${finalName}' 출처 정보를 불러오는 중...`);
     
     try {
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(target)}`;
-        const res = await fetch(proxyUrl);
-        const html = await res.text();
+        const res = await fetch(`/api/crawl?url=${encodeURIComponent(target)}`);
+        const data = await res.json();
+        const html = data.html;
         const doc = new DOMParser().parseFromString(html, 'text/html');
         
         const ogSiteName = doc.querySelector('meta[property="og:site_name"]');
