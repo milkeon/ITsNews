@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 
 export default function Header() {
   const { isDarkMode, toggleDarkMode } = useStore();
-  
+
   return (
     <header className="glass-header" style={{ padding: '0 24px', borderBottom: '1px solid var(--color-outline-variant)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '72px', maxWidth: '1600px', margin: '0 auto' }}>
@@ -12,8 +12,8 @@ export default function Header() {
           <div style={{ background: 'var(--color-primary-container)', color: 'var(--color-on-primary-container)', padding: '8px', borderRadius: 'var(--radius-md)' }}>
             <Newspaper size={24} />
           </div>
-          <span style={{ fontSize: '1.25rem', fontWeight: '700', letterSpacing: '-0.02em', color: 'var(--color-primary)' }}>
-            IT'sNew
+          <span style={{ fontSize: '1.8rem', fontWeight: '700', letterSpacing: '-0.02em', color: 'var(--color-primary)' }}>
+            ITsNew
           </span>
         </Link>
         <nav style={{ display: 'flex', gap: '24px' }}>
@@ -23,9 +23,9 @@ export default function Header() {
           <Link to="/recommendations" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '500' }}>
             <Sparkles size={18} /> 추천 기사
           </Link>
-          <button 
+          <button
             onClick={toggleDarkMode}
-            style={{ 
+            style={{
               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-on-surface)',
               display: 'flex', alignItems: 'center', marginLeft: '12px'
             }}
