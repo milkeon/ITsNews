@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/proxy/yozm/:path*",
+      "destination": "https://yozm.wishket.com/:path*"
+    },
+    {
+      "source": "/proxy/geek/:path*",
+      "destination": "https://news.hada.io/:path*"
+    },
+    {
+      "source": "/proxy/itworld/:path*",
+      "destination": "https://www.itworld.co.kr/:path*"
+    },
+    {
+      "source": "/proxy/notion/:path*",
+      "destination": "https://api.notion.com/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
