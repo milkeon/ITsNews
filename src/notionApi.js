@@ -1,30 +1,25 @@
-const NOTION_API_URL = '/proxy/notion/v1';
-
-const getHeaders = () => ({
-  'Authorization': `Bearer ${import.meta.env.VITE_NOTION_API_KEY}`,
-  'Notion-Version': '2022-06-28',
-  'Content-Type': 'application/json'
-});
+const API_ROUTE = '/api/notion';
 
 export const fetchAllNotionData = async () => {
-  const dbId = import.meta.env.VITE_NOTION_DB_ID;
-  if (!dbId || !import.meta.env.VITE_NOTION_API_KEY) {
-    return { sources: [], keywords: [], articles: [] };
-  }
-
   try {
-    const res = await fetch(`${NOTION_API_URL}/databases/${dbId}/query`, {
+    const res = await fetch(API_ROUTE, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: 'databases/query', method: 'POST' })
     });
-    if (!res.ok) throw new Error('Notion API Error');
+    if (!res.ok) throw new Error('Notion API Error via Serverless');
     const data = await res.json();
+    
+    if (data.error) {
+      console.error('Serverless Notion Error:', data.error);
+      return { sources: [], keywords: [], articles: [] };
+    }
     
     const sources = [];
     const keywords = [];
     const articles = [];
 
-    data.results.forEach(page => {
+    (data.results || []).forEach(page => {
       const type = page.properties.Type?.select?.name;
       const hidden = page.properties.Hidden?.checkbox || false;
       
@@ -42,13 +37,12 @@ export const fetchAllNotionData = async () => {
           hidden
         });
       } else if (type === 'Article') {
-        // 기존 코드와의 호환성을 위해 Article 데이터 구조 유지
         articles.push({
           id: page.properties.URL?.url || page.id,
           notionPageId: page.id,
           title: page.properties.Name?.title?.[0]?.plain_text || '',
           url: page.properties.URL?.url || '',
-          summary: '', // 통합 스키마에 summary는 없으나 필요하면 publisher나 title로 대체
+          summary: '', 
           date: page.properties.PublishedAt?.rich_text?.[0]?.plain_text || '',
           author: page.properties.Publisher?.rich_text?.[0]?.plain_text || '',
           imageUrl: page.properties.Image?.url || '',
@@ -65,25 +59,28 @@ export const fetchAllNotionData = async () => {
 };
 
 export const addSourceToNotion = async (name, url) => {
-  const dbId = import.meta.env.VITE_NOTION_DB_ID;
-  if (!dbId) return null;
-
   try {
-    const res = await fetch(`${NOTION_API_URL}/pages`, {
+    const res = await fetch(API_ROUTE, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        parent: { database_id: dbId },
-        properties: {
-          Name: { title: [{ text: { content: name } }] },
-          Type: { select: { name: 'Source' } },
-          URL: { url: url },
-          Hidden: { checkbox: false },
-          CreatedAt: { date: { start: new Date().toISOString() } }
+        endpoint: 'pages',
+        method: 'POST',
+        payload: {
+          parent: { database_id: process.env.VITE_NOTION_DB_ID || '' }, // Serverless 내부에서 id 치환 처리하므로 비워도 됨, 하지만 payload에 맞추어 전달.
+          // 수정: 서버리스 딴에서 DB ID를 아예 처리하도록 했으나 여기선 payload 자체를 넘겨야 하므로 서버리스 코드를 믿고 parent 부분은 제외하거나 그대로 둘 수 있음.
+          // 안정성을 위해 서버리스 함수에서는 pages 엔드포인트 호출 시 payload에 parent: { database_id: NOTION_DB_ID } 가 자동으로 들어가도록 api/notion.js 를 설계하는 것이 좋지만, 
+          // 일단 여기서는 Vercel 런타임에러를 막기위해 빈값을 넣고 api/notion.js를 다시 수정하자.
+          properties: {
+            Name: { title: [{ text: { content: name } }] },
+            Type: { select: { name: 'Source' } },
+            URL: { url: url },
+            Hidden: { checkbox: false },
+            CreatedAt: { date: { start: new Date().toISOString() } }
+          }
         }
       })
     });
-    if (!res.ok) throw new Error('Notion API Error');
     const data = await res.json();
     return data.id;
   } catch (error) {
@@ -93,24 +90,23 @@ export const addSourceToNotion = async (name, url) => {
 };
 
 export const addKeywordToNotion = async (text) => {
-  const dbId = import.meta.env.VITE_NOTION_DB_ID;
-  if (!dbId) return null;
-
   try {
-    const res = await fetch(`${NOTION_API_URL}/pages`, {
+    const res = await fetch(API_ROUTE, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        parent: { database_id: dbId },
-        properties: {
-          Name: { title: [{ text: { content: text } }] },
-          Type: { select: { name: 'Keyword' } },
-          Hidden: { checkbox: false },
-          CreatedAt: { date: { start: new Date().toISOString() } }
+        endpoint: 'pages',
+        method: 'POST',
+        payload: {
+          properties: {
+            Name: { title: [{ text: { content: text } }] },
+            Type: { select: { name: 'Keyword' } },
+            Hidden: { checkbox: false },
+            CreatedAt: { date: { start: new Date().toISOString() } }
+          }
         }
       })
     });
-    if (!res.ok) throw new Error('Notion API Error');
     const data = await res.json();
     return data.id;
   } catch (error) {
@@ -120,28 +116,27 @@ export const addKeywordToNotion = async (text) => {
 };
 
 export const addArticleToNotion = async (article) => {
-  const dbId = import.meta.env.VITE_NOTION_DB_ID;
-  if (!dbId) return null;
-
   try {
-    const res = await fetch(`${NOTION_API_URL}/pages`, {
+    const res = await fetch(API_ROUTE, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        parent: { database_id: dbId },
-        properties: {
-          Name: { title: [{ text: { content: article.title || '' } }] },
-          Type: { select: { name: 'Article' } },
-          URL: { url: article.url || null },
-          Image: { url: article.imageUrl || null },
-          Publisher: { rich_text: [{ text: { content: article.author || article.source || '' } }] },
-          PublishedAt: { rich_text: [{ text: { content: article.date || '' } }] },
-          Hidden: { checkbox: false },
-          CreatedAt: { date: { start: new Date().toISOString() } }
+        endpoint: 'pages',
+        method: 'POST',
+        payload: {
+          properties: {
+            Name: { title: [{ text: { content: article.title || '' } }] },
+            Type: { select: { name: 'Article' } },
+            URL: { url: article.url || null },
+            Image: { url: article.imageUrl || null },
+            Publisher: { rich_text: [{ text: { content: article.author || article.source || '' } }] },
+            PublishedAt: { rich_text: [{ text: { content: article.date || '' } }] },
+            Hidden: { checkbox: false },
+            CreatedAt: { date: { start: new Date().toISOString() } }
+          }
         }
       })
     });
-    if (!res.ok) throw new Error('Notion API Error');
     const data = await res.json();
     return data.id;
   } catch (error) {
@@ -153,12 +148,16 @@ export const addArticleToNotion = async (article) => {
 export const hideNotionPage = async (pageId) => {
   if (!pageId || pageId.toString().length < 10) return;
   try {
-    await fetch(`${NOTION_API_URL}/pages/${pageId}`, {
-      method: 'PATCH',
-      headers: getHeaders(),
+    await fetch(API_ROUTE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        properties: {
-          Hidden: { checkbox: true }
+        endpoint: `pages/${pageId}`,
+        method: 'PATCH',
+        payload: {
+          properties: {
+            Hidden: { checkbox: true }
+          }
         }
       })
     });
@@ -170,12 +169,16 @@ export const hideNotionPage = async (pageId) => {
 export const unhideNotionPage = async (pageId) => {
   if (!pageId || pageId.toString().length < 10) return;
   try {
-    await fetch(`${NOTION_API_URL}/pages/${pageId}`, {
-      method: 'PATCH',
-      headers: getHeaders(),
+    await fetch(API_ROUTE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        properties: {
-          Hidden: { checkbox: false }
+        endpoint: `pages/${pageId}`,
+        method: 'PATCH',
+        payload: {
+          properties: {
+            Hidden: { checkbox: false }
+          }
         }
       })
     });
