@@ -28,7 +28,9 @@ const knownSites = {
   'velog.io': 'Velog',
   'tistory.com': 'Tistory',
   'okky.kr': 'OKKY',
-  'maily.so': '뉴스레터'
+  'maily.so': '뉴스레터',
+  'it.donga.com': 'IT동아',
+  'zdnet.co.kr': '지디넷코리아'
 };
 
 export default function Home() {
@@ -60,27 +62,22 @@ export default function Home() {
         ? prev.filter(s => s !== sourceName) 
         : [...prev, sourceName]
     );
-    showToast(`'${sourceName}' 기사가 ${isActive ? '숨겨졌습니다' : '표시됩니다'}.`);
   };
 
   const formatDisplayName = (name) => {
     if (!name) return '';
     let cleaned = name.trim();
-    if (cleaned.includes('지디넷코리아')) return '지디넷코리아';
+    if (cleaned.includes('지디넷')) return '지디넷코리아';
+    if (cleaned.includes('IT동아')) return 'IT동아';
     
-    let isUrl = cleaned.startsWith('http') || cleaned.includes('.com') || cleaned.includes('.kr') || cleaned.includes('.io') || cleaned.includes('.net');
-    
+    let isUrl = cleaned.startsWith('http') || cleaned.includes('.');
     if (isUrl) {
       let host = cleaned.toLowerCase();
       try {
-        if (host.startsWith('http')) {
-          host = new URL(host).hostname;
-        } else {
-          host = host.split('/')[0];
-        }
+        if (host.startsWith('http')) host = new URL(host).hostname;
+        else host = host.split('/')[0];
         if (host.startsWith('www.')) host = host.substring(4);
       } catch(e) {}
-      
       return knownSites[host] || host; 
     }
     return cleaned;
@@ -92,7 +89,6 @@ export default function Home() {
       return;
     }
 
-    // 출처 목록에 변화가 없고 데이터가 이미 있다면 재요청 방지
     if (masterList.length > 0 && [...new Set(masterList.map(a => a.source))].length === visibleSources.length) {
       return;
     }
@@ -104,11 +100,7 @@ export default function Home() {
         const cleanName = formatDisplayName(source.name);
         const sourceUrl = source.url || source.name;
         try {
-          let targetUrl = sourceUrl.startsWith('http') ? sourceUrl : `https://${sourceUrl}`;
-          
-          if (cleanName === '요즘IT') targetUrl = 'https://yozm.wishket.com/magazine/';
-          else if (cleanName === 'GeekNews') targetUrl = 'https://news.hada.io/';
-          else if (cleanName === 'ITWORLD') targetUrl = 'https://www.itworld.co.kr/';
+          const targetUrl = sourceUrl.startsWith('http') ? sourceUrl : `https://${sourceUrl}`;
           
           const fetchAndParse = async (url) => {
             try {
@@ -119,35 +111,7 @@ export default function Home() {
               const doc = new DOMParser().parseFromString(html, 'text/html');
               let results = [];
 
-              // 0. 지디넷코리아 전용 정밀 파싱
-              if (cleanName === '지디넷코리아') {
-                const items = doc.querySelectorAll('.assetText, .news_item, .view_box');
-                items.forEach(item => {
-                  const linkEl = item.querySelector('a');
-                  if (!linkEl) return;
-                  const href = linkEl.getAttribute('href');
-                  const fullUrl = href.startsWith('http') ? href : new URL(href, url).href;
-                  if (results.some(r => r.url === fullUrl)) return;
-                  
-                  if (fullUrl.includes('zdnet.co.kr/news/news_view.asp') || fullUrl.includes('zdnet.co.kr/view/')) {
-                    const title = (item.querySelector('h3, .subtitle, .tit') || linkEl).textContent.trim();
-                    const summary = (item.querySelector('p, .desc') || {textContent: '지디넷코리아 최신 소식입니다.'}).textContent.trim();
-                    const imgEl = item.parentElement?.querySelector('img') || item.querySelector('img');
-                    
-                    results.push({
-                      id: fullUrl,
-                      title,
-                      source: cleanName,
-                      summary,
-                      url: fullUrl,
-                      img: (imgEl?.getAttribute('src') || stableImages[results.length % stableImages.length]),
-                      baseViews: Math.floor(Math.random() * 100)
-                    });
-                  }
-                });
-              }
-
-              // 1. JSON 기반 심층 파싱 (__NEXT_DATA__)
+              // 1. JSON 기반 심층 파싱 (__NEXT_DATA__) - 뉴스레터용
               const scriptData = doc.querySelector('script#__NEXT_DATA__');
               if (scriptData) {
                 try {
@@ -157,50 +121,75 @@ export default function Home() {
                     posts.slice(0, 20).forEach(post => {
                       const newsletterPath = jsonData?.props?.pageProps?.newsletter?.path || 'mwoji';
                       const pUrl = post.url || `https://maily.so/${newsletterPath}/posts/${post.id}`;
-                      results.push({
-                        id: pUrl,
-                        title: post.title,
-                        source: cleanName,
-                        summary: post.subTitle || '뉴스레터의 유익한 소식입니다.',
-                        url: pUrl,
-                        img: post.coverImageUrl || stableImages[results.length % stableImages.length],
-                        baseViews: post.viewCount || 0
-                      });
+                      results.push({ id: pUrl, title: post.title, source: cleanName, summary: post.subTitle || '뉴스레터 소식입니다.', url: pUrl, img: post.coverImageUrl || stableImages[results.length % stableImages.length], baseViews: post.viewCount || 0 });
                     });
                   }
                 } catch(e) {}
               }
 
-              // 2. HTML 링크 기반 파싱
+              // 2. 범용 지능형 클러스터 파싱 (핵심)
               if (results.length === 0) {
-                const links = Array.from(doc.querySelectorAll('a'));
-                const articleLinks = links.filter(a => {
-                  const h = (a.getAttribute('href') || '').toLowerCase();
-                  const t = (a.textContent || '').trim();
-                  if (cleanName.includes('뭐지') && h.includes('/posts/')) return true;
-                  if (t.length > 8 && !h.includes('javascript:') && !h.includes('#')) {
-                    if (h.includes('/posts/') || h.includes('/magazine/') || h.includes('/detail/')) return true;
+                // 반복되는 기사 영역을 찾기 위해 부모 노드들을 분석
+                const allLinks = Array.from(doc.querySelectorAll('a'));
+                const candidates = [];
+
+                allLinks.forEach(link => {
+                  const href = link.getAttribute('href');
+                  if (!href || href.startsWith('javascript:') || href.startsWith('#') || href.length < 2) return;
+                  
+                  const text = link.textContent.trim();
+                  if (text.length < 5) return; // 너무 짧은 텍스트 제외
+
+                  // 부모 요소의 구조적 서명(Signature) 생성
+                  let parent = link.parentElement;
+                  let signature = '';
+                  let depth = 0;
+                  while (parent && depth < 3) {
+                    signature += `${parent.tagName}.${parent.className}>`;
+                    parent = parent.parentElement;
+                    depth++;
                   }
-                  return false;
+
+                  candidates.push({ link, href, text, signature });
                 });
 
-                const seen = new Set();
-                articleLinks.forEach(a => {
-                  const href = a.getAttribute('href');
-                  const fullUrl = href.startsWith('http') ? href : new URL(href, url).href;
-                  if (seen.has(fullUrl)) return;
-                  seen.add(fullUrl);
+                // 동일한 시그니처를 가진 링크들끼리 그룹화 (클러스터링)
+                const clusters = {};
+                candidates.forEach(c => {
+                  clusters[c.signature] = clusters[c.signature] || [];
+                  clusters[c.signature].push(c);
+                });
 
-                  results.push({
-                    id: fullUrl,
-                    title: a.textContent.trim().split('\n')[0],
-                    source: cleanName,
-                    summary: '최신 IT 소식을 확인해보세요.',
-                    url: fullUrl,
-                    img: stableImages[(results.length + cleanName.length) % stableImages.length],
-                    baseViews: Math.floor(Math.random() * 50)
+                // 가장 유력한 기사 목록 클러스터 선정 (아이템 수가 적당하고 텍스트가 풍부한 것)
+                const sortedClusters = Object.values(clusters).sort((a, b) => b.length - a.length);
+                const bestCluster = sortedClusters.find(cluster => {
+                  const avgLen = cluster.reduce((acc, curr) => acc + curr.text.length, 0) / cluster.length;
+                  return cluster.length >= 3 && avgLen > 10;
+                }) || sortedClusters[0];
+
+                if (bestCluster) {
+                  const seen = new Set();
+                  bestCluster.forEach(item => {
+                    const fullUrl = item.href.startsWith('http') ? item.href : new URL(item.href, url).href;
+                    if (seen.has(fullUrl)) return;
+                    seen.add(fullUrl);
+
+                    // 기사 영역(부모) 내에서 이미지와 요약 찾기
+                    const container = item.link.closest('div, li, article, section') || item.link.parentElement;
+                    const img = container.querySelector('img');
+                    const summaryEl = container.querySelector('p, span, .desc, .summary');
+                    
+                    results.push({
+                      id: fullUrl,
+                      title: item.text.split('\n')[0].trim(),
+                      source: cleanName,
+                      summary: summaryEl ? summaryEl.textContent.trim().substring(0, 120) : '최신 IT 소식을 확인해보세요.',
+                      url: fullUrl,
+                      img: img?.getAttribute('src') || img?.getAttribute('data-src') || stableImages[(results.length + cleanName.length) % stableImages.length],
+                      baseViews: Math.floor(Math.random() * 100)
+                    });
                   });
-                });
+                }
               }
               return results;
             } catch (err) {
@@ -210,21 +199,15 @@ export default function Home() {
 
           let articles = await fetchAndParse(targetUrl);
 
-          if (articles.length === 0 && (targetUrl.includes('maily.so') || cleanName.includes('뭐지'))) {
+          // 지능형 엔진으로도 부족할 경우 하위 경로 자동 탐색 (뉴스레터 등 대비)
+          if (articles.length < 3 && (targetUrl.includes('maily.so') || targetUrl.includes('substack.com'))) {
             const retryUrl = targetUrl.endsWith('/') ? `${targetUrl}posts` : `${targetUrl}/posts`;
-            articles = await fetchAndParse(retryUrl);
+            const retryArticles = await fetchAndParse(retryUrl);
+            if (retryArticles.length > articles.length) articles = retryArticles;
           }
 
           if (articles.length === 0) {
-            return [{
-              id: `error-${cleanName}`,
-              title: `[${cleanName}] 통신 지연: 무작위 기사 대체 중`,
-              source: cleanName,
-              summary: '대상 사이트로부터 파싱하지 못하여 회색(0) 처리됨',
-              url: targetUrl,
-              img: stableImages[Math.floor(Math.random() * stableImages.length)],
-              baseViews: 0
-            }];
+            return [{ id: `err-${cleanName}`, title: `[${cleanName}] 수집 중`, source: cleanName, summary: '연결 상태를 확인 중입니다.', url: targetUrl, img: stableImages[0], baseViews: 0 }];
           }
           return articles;
         } catch (err) {
@@ -250,66 +233,49 @@ export default function Home() {
 
   const displayList = [...filteredList];
   if (sortBy === 'hot') {
-    displayList.sort((a, b) => {
-      const valB = (b.baseViews || 0) + (articleViews[b.id] || 0);
-      const valA = (a.baseViews || 0) + (articleViews[a.id] || 0);
-      return valB - valA;
-    });
+    displayList.sort((a, b) => ((b.baseViews || 0) + (articleViews[b.id] || 0)) - ((a.baseViews || 0) + (articleViews[a.id] || 0)));
   }
   const displayArticles = displayList.slice(0, visibleCount);
 
-  const hotList = [...filteredList].sort((a, b) => {
-    const valB = (b.baseViews || 0) + (articleViews[b.id] || 0);
-    const valA = (a.baseViews || 0) + (articleViews[a.id] || 0);
-    return valB - valA;
-  });
-  const carouselItems = hotList.length >= 3 ? hotList.slice(0, 3) : mockHottest;
+  const hotList = [...filteredList].sort((a, b) => ((b.baseViews || 0) + (articleViews[b.id] || 0)) - ((a.baseViews || 0) + (articleViews[a.id] || 0)));
+  const carouselItems = hotList.length > 0 ? hotList.slice(0, 3) : mockHottest;
 
-  const handleNext = useCallback(() => {
-    setCarouselIndex((prev) => (prev + 1) % carouselItems.length);
-  }, [carouselItems.length]);
-
-  const handlePrev = useCallback(() => {
-    setCarouselIndex((prev) => (prev - 1 + carouselItems.length) % carouselItems.length);
-  }, [carouselItems.length]);
+  const handleNext = useCallback(() => setCarouselIndex((prev) => (prev + 1) % carouselItems.length), [carouselItems.length]);
+  const handlePrev = useCallback(() => setCarouselIndex((prev) => (prev - 1 + carouselItems.length) % carouselItems.length), [carouselItems.length]);
 
   useEffect(() => {
-    timerRef.current = setInterval(handleNext, 8000); // 8초로 완화
+    timerRef.current = setInterval(handleNext, 8000);
     return () => clearInterval(timerRef.current);
   }, [handleNext]);
 
   useEffect(() => {
-    const options = { root: null, rootMargin: '20px', threshold: 0.1 };
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && !loading && visibleCount < displayList.length) {
-        setVisibleCount(prev => prev + 4);
-      }
-    }, options);
+      if (entries[0].isIntersecting && !loading && visibleCount < displayList.length) setVisibleCount(prev => prev + 4);
+    }, { threshold: 0.1 });
     if (observerRef.current) observer.observe(observerRef.current);
     return () => observer.disconnect();
   }, [loading, visibleCount, displayList.length]);
 
   const availableSources = visibleSources.map(s => formatDisplayName(s.name));
-
-  const handleImageError = (e) => {
-    const randomIdx = Math.floor(Math.random() * stableImages.length);
-    e.target.src = stableImages[randomIdx];
-  };
+  const handleImageError = (e) => { e.target.src = stableImages[Math.floor(Math.random() * stableImages.length)]; };
 
   return (
     <div style={{ position: 'relative' }}>
       <div style={{ marginBottom: '32px', padding: '16px 0', borderBottom: '1px solid var(--color-outline-variant)', position: 'sticky', top: '0', zIndex: 35, background: 'var(--color-surface)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', gap: '12px', overflowX: 'auto', whiteSpace: 'nowrap', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
         <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--color-primary)', marginRight: '8px' }}>필터링:</div>
-        {availableSources.map(sourceName => {
-          const isActive = activeSourceFilters.includes(sourceName);
+        {availableSources.map(name => {
+          const isActive = activeSourceFilters.includes(name);
           return (
-            <button key={sourceName} onClick={() => toggleSourceFilter(sourceName)} style={{ padding: '8px 16px', borderRadius: '100px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s ease', flexShrink: 0, border: '1px solid', borderColor: isActive ? 'var(--color-primary)' : 'var(--color-outline)', background: isActive ? 'var(--color-primary)' : 'transparent', color: isActive ? 'var(--color-on-primary)' : 'var(--color-on-surface-variant)', boxShadow: isActive ? '0 4px 12px rgba(var(--color-primary-rgb), 0.3)' : 'none' }}>
-              {sourceName}
+            <button key={name} onClick={() => toggleSourceFilter(name)} style={{ padding: '8px 16px', borderRadius: '100px', fontSize: '0.9rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.3s ease', flexShrink: 0, border: '1px solid', borderColor: isActive ? 'var(--color-primary)' : 'var(--color-outline)', background: isActive ? 'var(--color-primary)' : 'transparent', color: isActive ? 'var(--color-on-primary)' : 'var(--color-on-surface-variant)', boxShadow: isActive ? '0 4px 12px rgba(var(--color-primary-rgb), 0.3)' : 'none' }}>
+              {name}
             </button>
           );
         })}
         {availableSources.length > 0 && (
-          <button onClick={() => setActiveSourceFilters(activeSourceFilters.length === availableSources.length ? [] : availableSources)} style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'underline' }}>
+          <button 
+            onClick={() => setActiveSourceFilters(activeSourceFilters.length === availableSources.length ? [] : availableSources)}
+            style={{ fontSize: '0.8rem', background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'underline', paddingLeft: '12px' }}
+          >
             {activeSourceFilters.length === availableSources.length ? '모두 해제' : '모두 선택'}
           </button>
         )}
@@ -356,12 +322,7 @@ export default function Home() {
         {carouselItems.map((item, idx) => (
           <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" style={{ position: 'absolute', inset: 0, opacity: idx === carouselIndex ? 1 : 0, transition: 'opacity 1s ease-in-out', textDecoration: 'none' }}>
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.8) 100%)', zIndex: 1 }} />
-            <img 
-              src={item.img || item.image} 
-              alt={item.title} 
-              onError={handleImageError}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-            />
+            <img src={item.img || item.image} alt={item.title} onError={handleImageError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             <div style={{ position: 'absolute', bottom: '64px', left: '64px', right: '64px', zIndex: 2 }}>
               <span style={{ display: 'inline-block', padding: '6px 12px', background: 'var(--color-primary)', color: 'var(--color-on-primary)', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>HOT ISSUE</span>
               <h1 style={{ color: '#fff', fontSize: '2.25rem', marginBottom: '16px', textShadow: '0 4px 12px rgba(0,0,0,0.5)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.title}</h1>
@@ -388,12 +349,7 @@ export default function Home() {
           return (
             <a href={article.url} target="_blank" rel="noopener noreferrer" key={article.id} className="premium-card" style={{ display: 'flex', flexDirection: 'column' }} onClick={(e) => { if (e.target.closest('button')) { e.preventDefault(); return; } incrementView(article.id); }}>
               <div style={{ width: '100%', height: '180px', overflow: 'hidden', background: 'var(--color-surface-container-low)' }}>
-                <img 
-                  src={article.img || stableImages[0]} 
-                  alt={article.title} 
-                  onError={handleImageError}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                />
+                <img src={article.img || stableImages[0]} alt={article.title} onError={handleImageError} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
               <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
