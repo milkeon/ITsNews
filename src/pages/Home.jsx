@@ -30,7 +30,11 @@ const knownSites = {
   'okky.kr': 'OKKY',
   'maily.so': '뉴스레터',
   'it.donga.com': 'IT동아',
-  'zdnet.co.kr': '지디넷코리아'
+  'zdnet.co.kr': '지디넷코리아',
+  'outstanding.kr': '아웃스탠딩',
+  'aitimes.com': 'AI타임스',
+  'bloter.net': '블로터',
+  'techrecipe.co.kr': '테크레시피'
 };
 
 export default function Home() {
@@ -78,7 +82,11 @@ export default function Home() {
         else host = host.split('/')[0];
         if (host.startsWith('www.')) host = host.substring(4);
       } catch(e) {}
-      return knownSites[host] || host; 
+      
+      if (knownSites[host]) return knownSites[host];
+      
+      // 알려지지 않은 사이트의 경우 도메인 확장자 제거 및 첫글자 대문자
+      return host.split('.')[0].charAt(0).toUpperCase() + host.split('.')[0].slice(1);
     }
     return cleaned;
   };
@@ -261,7 +269,7 @@ export default function Home() {
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ marginBottom: '32px', padding: '16px 0', borderBottom: '1px solid var(--color-outline-variant)', position: 'sticky', top: '0', zIndex: 35, background: 'var(--color-surface)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', gap: '12px', overflowX: 'auto', whiteSpace: 'nowrap', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+      <div style={{ marginBottom: '32px', padding: '16px 0', borderBottom: '1px solid var(--color-outline-variant)', position: 'sticky', top: '64px', zIndex: 35, background: 'var(--color-surface)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', gap: '12px', overflowX: 'auto', whiteSpace: 'nowrap', msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
         <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--color-primary)', marginRight: '8px' }}>필터링:</div>
         {availableSources.map(name => {
           const isActive = activeSourceFilters.includes(name);
