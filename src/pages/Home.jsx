@@ -182,16 +182,30 @@ export default function Home() {
                     if (seen.has(fullUrl)) return;
                     seen.add(fullUrl);
 
-                    // 기사 영역(부모) 내에서 이미지와 요약 찾기
+                    // 기사 영역(부모) 내에서 제목, 이미지, 요약 정밀 탐색
                     const container = item.link.closest('div, li, article, section') || item.link.parentElement;
-                    const img = container.querySelector('img');
-                    const summaryEl = container.querySelector('p, span, .desc, .summary');
                     
+                    // 1. 제목 추출 (h태그나 strong 등을 우선, 없으면 링크 텍스트의 첫 줄)
+                    const titleEl = container.querySelector('h1, h2, h3, h4, h5, h6, strong, .title, .tit, .subtitle');
+                    let title = titleEl ? titleEl.textContent.trim() : item.text.split('\n')[0].trim();
+                    if (title.length < 5 && item.text.length > title.length) title = item.text.trim().substring(0, 50);
+
+                    // 2. 요약 추출 (제목과 겹치지 않는 텍스트 탐색)
+                    const img = container.querySelector('img');
+                    const summaryEl = container.querySelector('p, span, .desc, .summary, div:last-child');
+                    let summary = summaryEl ? summaryEl.textContent.trim() : '최신 IT 소식을 확인해보세요.';
+                    
+                    // 제목과 요약이 섞여있을 경우 정제
+                    if (summary.startsWith(title)) {
+                      summary = summary.replace(title, '').trim();
+                    }
+                    if (summary.length < 5) summary = '기사 본문 내용을 확인해보세요.';
+
                     results.push({
                       id: fullUrl,
-                      title: item.text.split('\n')[0].trim(),
+                      title,
                       source: cleanName,
-                      summary: summaryEl ? summaryEl.textContent.trim().substring(0, 120) : '최신 IT 소식을 확인해보세요.',
+                      summary: summary.length > 120 ? summary.substring(0, 120) + '...' : summary,
                       url: fullUrl,
                       img: img?.getAttribute('src') || img?.getAttribute('data-src') || stableImages[(results.length + cleanName.length) % stableImages.length],
                       baseViews: Math.floor(Math.random() * 100)
