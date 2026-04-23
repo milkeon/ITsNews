@@ -1,17 +1,36 @@
+const IS_DEV = import.meta.env.DEV;
 const API_ROUTE = '/api/notion';
+
+// Notion 관련 환경 변수 (Vite는 VITE_ 접두사가 붙으면 클라이언트에서도 접근 가능)
+const NOTION_API_KEY = import.meta.env.VITE_NOTION_API_KEY;
+const NOTION_DB_ID = import.meta.env.VITE_NOTION_DB_ID;
 
 export const fetchAllNotionData = async () => {
   try {
-    const res = await fetch(API_ROUTE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endpoint: 'databases/query', method: 'POST' })
-    });
-    if (!res.ok) throw new Error('Notion API Error via Serverless');
+    let res;
+    if (IS_DEV) {
+      // 로컬에서는 프록시(/api/notion)를 통해 직접 호출 (CORS 회피)
+      res = await fetch(`/api/notion/databases/${NOTION_DB_ID}/query`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${NOTION_API_KEY}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        }
+      });
+    } else {
+      // 배포 환경에서는 서버리스 함수 호출
+      res = await fetch(API_ROUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: 'databases/query', method: 'POST' })
+      });
+    }
+    if (!res.ok) throw new Error('Notion API Error');
     const data = await res.json();
     
     if (data.error) {
-      console.error('Serverless Notion Error:', data.error);
+      console.error('Notion Error:', data.error);
       return { sources: [], keywords: [], articles: [] };
     }
     
@@ -60,27 +79,35 @@ export const fetchAllNotionData = async () => {
 
 export const addSourceToNotion = async (name, url) => {
   try {
-    const res = await fetch(API_ROUTE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint: 'pages',
+    let res;
+    const payload = {
+      parent: { database_id: NOTION_DB_ID },
+      properties: {
+        Name: { title: [{ text: { content: name } }] },
+        Type: { select: { name: 'Source' } },
+        URL: { url: url },
+        Hidden: { checkbox: false },
+        CreatedAt: { date: { start: new Date().toISOString() } }
+      }
+    };
+
+    if (IS_DEV) {
+      res = await fetch(`/api/notion/pages`, {
         method: 'POST',
-        payload: {
-          parent: { database_id: process.env.VITE_NOTION_DB_ID || '' }, // Serverless 내부에서 id 치환 처리하므로 비워도 됨, 하지만 payload에 맞추어 전달.
-          // 수정: 서버리스 딴에서 DB ID를 아예 처리하도록 했으나 여기선 payload 자체를 넘겨야 하므로 서버리스 코드를 믿고 parent 부분은 제외하거나 그대로 둘 수 있음.
-          // 안정성을 위해 서버리스 함수에서는 pages 엔드포인트 호출 시 payload에 parent: { database_id: NOTION_DB_ID } 가 자동으로 들어가도록 api/notion.js 를 설계하는 것이 좋지만, 
-          // 일단 여기서는 Vercel 런타임에러를 막기위해 빈값을 넣고 api/notion.js를 다시 수정하자.
-          properties: {
-            Name: { title: [{ text: { content: name } }] },
-            Type: { select: { name: 'Source' } },
-            URL: { url: url },
-            Hidden: { checkbox: false },
-            CreatedAt: { date: { start: new Date().toISOString() } }
-          }
-        }
-      })
-    });
+        headers: {
+          'Authorization': `Bearer ${NOTION_API_KEY}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(API_ROUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: 'pages', method: 'POST', payload })
+      });
+    }
     const data = await res.json();
     return data.id;
   } catch (error) {
@@ -91,22 +118,34 @@ export const addSourceToNotion = async (name, url) => {
 
 export const addKeywordToNotion = async (text) => {
   try {
-    const res = await fetch(API_ROUTE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint: 'pages',
+    let res;
+    const payload = {
+      parent: { database_id: NOTION_DB_ID },
+      properties: {
+        Name: { title: [{ text: { content: text } }] },
+        Type: { select: { name: 'Keyword' } },
+        Hidden: { checkbox: false },
+        CreatedAt: { date: { start: new Date().toISOString() } }
+      }
+    };
+
+    if (IS_DEV) {
+      res = await fetch(`/api/notion/pages`, {
         method: 'POST',
-        payload: {
-          properties: {
-            Name: { title: [{ text: { content: text } }] },
-            Type: { select: { name: 'Keyword' } },
-            Hidden: { checkbox: false },
-            CreatedAt: { date: { start: new Date().toISOString() } }
-          }
-        }
-      })
-    });
+        headers: {
+          'Authorization': `Bearer ${NOTION_API_KEY}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(API_ROUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: 'pages', method: 'POST', payload })
+      });
+    }
     const data = await res.json();
     return data.id;
   } catch (error) {
@@ -117,26 +156,38 @@ export const addKeywordToNotion = async (text) => {
 
 export const addArticleToNotion = async (article) => {
   try {
-    const res = await fetch(API_ROUTE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint: 'pages',
+    let res;
+    const payload = {
+      parent: { database_id: NOTION_DB_ID },
+      properties: {
+        Name: { title: [{ text: { content: article.title || '' } }] },
+        Type: { select: { name: 'Article' } },
+        URL: { url: article.url || null },
+        Image: { url: article.imageUrl || null },
+        Publisher: { rich_text: [{ text: { content: article.author || article.source || '' } }] },
+        PublishedAt: { rich_text: [{ text: { content: article.date || '' } }] },
+        Hidden: { checkbox: false },
+        CreatedAt: { date: { start: new Date().toISOString() } }
+      }
+    };
+
+    if (IS_DEV) {
+      res = await fetch(`/api/notion/pages`, {
         method: 'POST',
-        payload: {
-          properties: {
-            Name: { title: [{ text: { content: article.title || '' } }] },
-            Type: { select: { name: 'Article' } },
-            URL: { url: article.url || null },
-            Image: { url: article.imageUrl || null },
-            Publisher: { rich_text: [{ text: { content: article.author || article.source || '' } }] },
-            PublishedAt: { rich_text: [{ text: { content: article.date || '' } }] },
-            Hidden: { checkbox: false },
-            CreatedAt: { date: { start: new Date().toISOString() } }
-          }
-        }
-      })
-    });
+        headers: {
+          'Authorization': `Bearer ${NOTION_API_KEY}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(API_ROUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: 'pages', method: 'POST', payload })
+      });
+    }
     const data = await res.json();
     return data.id;
   } catch (error) {
@@ -148,19 +199,33 @@ export const addArticleToNotion = async (article) => {
 export const hideNotionPage = async (pageId) => {
   if (!pageId || pageId.toString().length < 10) return;
   try {
-    await fetch(API_ROUTE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint: `pages/${pageId}`,
+    const payload = {
+      properties: {
+        Hidden: { checkbox: true }
+      }
+    };
+
+    if (IS_DEV) {
+      await fetch(`/api/notion/pages/${pageId}`, {
         method: 'PATCH',
-        payload: {
-          properties: {
-            Hidden: { checkbox: true }
-          }
-        }
-      })
-    });
+        headers: {
+          'Authorization': `Bearer ${NOTION_API_KEY}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(API_ROUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: `pages/${pageId}`,
+          method: 'PATCH',
+          payload
+        })
+      });
+    }
   } catch (error) {
     console.error('Failed to hide page in Notion:', error);
   }
@@ -169,19 +234,33 @@ export const hideNotionPage = async (pageId) => {
 export const unhideNotionPage = async (pageId) => {
   if (!pageId || pageId.toString().length < 10) return;
   try {
-    await fetch(API_ROUTE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        endpoint: `pages/${pageId}`,
+    const payload = {
+      properties: {
+        Hidden: { checkbox: false }
+      }
+    };
+
+    if (IS_DEV) {
+      await fetch(`/api/notion/pages/${pageId}`, {
         method: 'PATCH',
-        payload: {
-          properties: {
-            Hidden: { checkbox: false }
-          }
-        }
-      })
-    });
+        headers: {
+          'Authorization': `Bearer ${NOTION_API_KEY}`,
+          'Notion-Version': '2022-06-28',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(API_ROUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: `pages/${pageId}`,
+          method: 'PATCH',
+          payload
+        })
+      });
+    }
   } catch (error) {
     console.error('Failed to unhide page in Notion:', error);
   }
