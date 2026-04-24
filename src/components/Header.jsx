@@ -13,7 +13,7 @@ export default function Header() {
             <Newspaper size={24} />
           </div>
           <span style={{ fontSize: '1.8rem', fontWeight: '700', letterSpacing: '-0.02em', color: 'var(--color-primary)' }}>
-            ITsNew
+            ITsNews
           </span>
         </Link>
         <nav style={{ display: 'flex', gap: '24px' }}>
