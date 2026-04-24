@@ -110,6 +110,37 @@ const displayImg = article.img || stableImages[getHashCode(article.url) % stable
 
 ---
 
+### 5. 지능형 관심사 분석 및 맞춤 추천 엔진
+사용자의 활동 데이터(좋아요, 키워드)를 다차원으로 분석하여 개인화된 IT 인사이트를 제공합니다.
+
+#### 💻 핵심 코드 (Interest Analysis)
+```javascript
+// 카테고리별 가중치 기반 관심도 점수 계산
+const analyzeInterests = () => {
+  const texts = activeArticles.map(a => a.title + " " + a.summary).join(' ');
+  const predefinedCategories = {
+    '인공지능/AI': ['AI', '인공지능', '챗GPT', 'GPT', '모델', 'LLM'],
+    '개발/프로그래밍': ['개발', '프론트엔드', '백엔드', '코딩', '코드', '리액트'],
+    // ... 카테고리 정의
+  };
+  
+  // 키워드 가중치(20점) + 본문 빈도 가중치(5점) 합산 로직
+  Object.keys(predefinedCategories).forEach(cat => {
+    predefinedCategories[cat].forEach(word => {
+      const matches = texts.match(new RegExp(word, 'gi'));
+      if (matches) scores[cat] = (scores[cat] || 0) + (matches.length * 5);
+    });
+  });
+  
+  return calculatePercentage(scores); // 상대적 비율로 시각화 데이터 반환
+};
+```
+#### 🔍 상세 설명
+- **가중치 기반 분류**: 단순히 단어의 개수를 세는 것이 아니라, 사용자가 명시한 '관심 키워드'에는 더 높은 가중치를 부여하여 분석의 정확도를 높였습니다.
+- **다차원 카테고리 매핑**: AI, 개발, 클라우드, 트렌드, 보안 등 5대 핵심 IT 분야로 사용자의 관심을 자동 분류합니다.
+- **인사이트 시각화**: 분석된 점수를 퍼센티지(%)로 환산하여 사용자가 자신의 관심 분포를 한눈에 파악할 수 있도록 프로그레스 바 형태의 UI를 제공합니다.
+
+
 ## 📂 프로젝트 파일 구조
 - `src/pages/Home.jsx`: 지능형 스크래핑 엔진 및 메인 피드 제어
 - `src/pages/Likes.jsx`: 아카이브 목록 렌더링 및 해시 기반 이미지 처리
